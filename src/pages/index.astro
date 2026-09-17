@@ -208,25 +208,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       }
 
       function detectPixelArt(file, image) {
-        const sampleSize = Math.min(Math.max(image.naturalWidth, image.naturalHeight), 256);
-        const canvas = document.createElement('canvas');
-        canvas.width = sampleSize;
-        canvas.height = sampleSize;
-        const context = canvas.getContext('2d');
-        context.imageSmoothingEnabled = false;
-        context.drawImage(image, 0, 0, sampleSize, sampleSize);
-        const pixels = context.getImageData(0, 0, sampleSize, sampleSize).data;
-        const colors = new Set();
-
-        for (let index = 0; index < pixels.length; index += 4) {
-          if (pixels[index + 3] < 10) continue;
-          colors.add(`${pixels[index]},${pixels[index + 1]},${pixels[index + 2]},${pixels[index + 3]}`);
-          if (colors.size > 1024) return false;
-        }
-
+        // Small, compact raster assets are commonly pixel art or intentionally hard-edged.
+        // Prefer nearest-neighbor for them; regular high-resolution logos keep smoothing.
         return Math.max(image.naturalWidth, image.naturalHeight) <= 512
-          && file.size <= 300 * 1024
-          && colors.size <= 1024;
+          && file.size <= 300 * 1024;
       }
 
       function updatePixelMode(enabled, rerender = true) {
@@ -511,14 +496,17 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .preview-grid { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
   .preview-card { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #898a82; font-size: 10px; }
   .icon-frame { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; border: 1px solid #dfded7; border-radius: 10px; }
-  .icon-frame canvas { display: block; max-width: 64px; max-height: 64px; image-rendering: auto; }
+  .icon-frame canvas { display: block; max-width: 96px; max-height: 96px; image-rendering: auto; }
   .preview-grid.pixel-mode .icon-frame canvas { image-rendering: pixelated; }
   .icon-frame.size-16 canvas { width: 32px; height: 32px; }
   .icon-frame.size-32 canvas { width: 40px; height: 40px; }
   .icon-frame.size-48 canvas { width: 48px; height: 48px; }
-  .icon-frame.size-180 canvas { width: 58px; height: 58px; }
-  .icon-frame.size-192 canvas { width: 60px; height: 60px; }
-  .icon-frame.size-512 canvas { width: 64px; height: 64px; }
+  .icon-frame.size-180 { width: 88px; height: 88px; }
+  .icon-frame.size-180 canvas { width: 76px; height: 76px; }
+  .icon-frame.size-192 { width: 96px; height: 96px; }
+  .icon-frame.size-192 canvas { width: 84px; height: 84px; }
+  .icon-frame.size-512 { width: 112px; height: 112px; }
+  .icon-frame.size-512 canvas { width: 96px; height: 96px; }
   .package-settings { display: flex; align-items: center; gap: 18px; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e3e2dc; }
   .package-settings label { flex: 0 0 auto; font-size: 13px; font-weight: 700; }
   .package-settings label span { color: #9b9c94; font-weight: 400; }
