@@ -99,6 +99,20 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
             </label>
           </div>
 
+          <div class="focus-settings" id="focus-settings" hidden>
+            <div class="focus-copy">
+              <strong>Favicon focus</strong>
+              <small id="focus-note">This logo contains four separate marks. A single mark stays sharper at 16×16.</small>
+            </div>
+            <select id="focus-select" aria-label="Choose the favicon focus">
+              <option value="full">Full logo</option>
+              <option value="0">Top-left mark</option>
+              <option value="1">Top-right mark</option>
+              <option value="2">Bottom-left mark</option>
+              <option value="3">Bottom-right mark</option>
+            </select>
+          </div>
+
           <div class="download-row">
             <div class="package-summary">
               <span class="ready-icon">✓</span>
@@ -160,6 +174,9 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const siteNameInput = $('#site-name');
       const pixelModeInput = $('#pixel-mode');
       const renderModeNote = $('#render-mode-note');
+      const focusSettings = $('#focus-settings');
+      const focusSelect = $('#focus-select');
+      const focusNote = $('#focus-note');
       const downloadButton = $('#download-button');
       const downloadHint = $('#download-hint');
       const changeButton = $('#change-button');
@@ -167,8 +184,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       let selectedFile = null;
       let loadedImage = null;
       let sourceCanvas = null;
+      let sourceRegions = [];
       let previewObjectUrl = null;
       let pixelMode = false;
+      let focusSelection = 'full';
 
       function showError(message) {
         errorMessage.textContent = message;
@@ -258,18 +277,74 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         const trimmedCanvas = document.createElement('canvas');
         trimmedCanvas.width = maxX - minX + 1;
         trimmedCanvas.height = maxY - minY + 1;
-        trimmedCanvas.getContext('2d').drawImage(
-          fullCanvas,
-          minX,
-          minY,
-          trimmedCanvas.width,
-          trimmedCanvas.height,
+        // Copy pixels directly so trimming never introduces a second resampling pass.
+        trimmedCanvas.getContext('2d').putImageData(
+          fullContext.getImageData(minX, minY, trimmedCanvas.width, trimmedCanvas.height),
           0,
           0,
-          trimmedCanvas.width,
-          trimmedCanvas.height,
         );
         return trimmedCanvas;
+      }
+
+      function getOccupiedGroups(canvas, axis) {
+        const context = canvas.getContext('2d');
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const length = axis === 'row' ? canvas.height : canvas.width;
+        const groups = [];
+        let start = -1;
+
+        for (let index = 0; index < length; index += 1) {
+          let occupied = false;
+          const from = axis === 'row' ? 0 : index;
+          const to = axis === 'row' ? canvas.width : canvas.height;
+          for (let offset = from; offset < to; offset += 1) {
+            const x = axis === 'row' ? offset : index;
+            const y = axis === 'row' ? index : offset;
+            if (pixels[(y * canvas.width + x) * 4 + 3] > 8) {
+              occupied = true;
+              break;
+            }
+          }
+
+          if (occupied && start < 0) start = index;
+          if (!occupied && start >= 0) {
+            groups.push({ start, end: index - 1 });
+            start = -1;
+          }
+        }
+
+        if (start >= 0) groups.push({ start, end: length - 1 });
+        return groups;
+      }
+
+      function detectFocusRegions(canvas) {
+        if (!canvas) return [];
+        const rows = getOccupiedGroups(canvas, 'row');
+        const columns = getOccupiedGroups(canvas, 'column');
+        if (rows.length !== 2 || columns.length !== 2) return [];
+
+        const regions = [];
+        rows.forEach((row) => {
+          columns.forEach((column) => {
+            regions.push({
+              x: column.start,
+              y: row.start,
+              width: column.end - column.start + 1,
+              height: row.end - row.start + 1,
+            });
+          });
+        });
+        return regions;
+      }
+
+      function getActiveSource() {
+        const source = sourceCanvas || loadedImage;
+        const fullWidth = sourceCanvas ? sourceCanvas.width : loadedImage.naturalWidth;
+        const fullHeight = sourceCanvas ? sourceCanvas.height : loadedImage.naturalHeight;
+        const region = focusSelection === 'full' ? null : sourceRegions[Number(focusSelection)];
+        return region
+          ? { source, x: region.x, y: region.y, width: region.width, height: region.height }
+          : { source, x: 0, y: 0, width: fullWidth, height: fullHeight };
       }
 
       function createIconCanvas(size) {
@@ -281,17 +356,38 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         context.imageSmoothingEnabled = !pixelMode;
         if (!pixelMode) context.imageSmoothingQuality = 'high';
 
-        const source = sourceCanvas || loadedImage;
-        const sourceWidth = sourceCanvas ? sourceCanvas.width : loadedImage.naturalWidth;
-        const sourceHeight = sourceCanvas ? sourceCanvas.height : loadedImage.naturalHeight;
-        const padding = size < 64 ? 0.14 : 0.1;
+        const activeSource = getActiveSource();
+        const source = activeSource.source;
+        const sourceWidth = activeSource.width;
+        const sourceHeight = activeSource.height;
+        // The transparent margins have already been cropped. Pixel art should use
+        // every available pixel instead of adding another shrinking pass.
+        const padding = pixelMode ? 0 : size < 64 ? 0.14 : 0.1;
         const available = size * (1 - padding * 2);
         const scale = Math.min(available / sourceWidth, available / sourceHeight);
-        const width = sourceWidth * scale;
-        const height = sourceHeight * scale;
-        const x = (size - width) / 2;
-        const y = (size - height) / 2;
-        context.drawImage(source, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
+        let width = sourceWidth * scale;
+        let height = sourceHeight * scale;
+        let x = (size - width) / 2;
+        let y = (size - height) / 2;
+
+        if (pixelMode) {
+          width = Math.max(1, Math.round(width));
+          height = Math.max(1, Math.round(height));
+          x = Math.floor((size - width) / 2);
+          y = Math.floor((size - height) / 2);
+        }
+
+        context.drawImage(
+          source,
+          activeSource.x,
+          activeSource.y,
+          sourceWidth,
+          sourceHeight,
+          x,
+          y,
+          width,
+          height,
+        );
         return canvas;
       }
 
@@ -365,6 +461,13 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           selectedFile = file;
           loadedImage = await loadImage(file);
           sourceCanvas = createTrimmedSource(loadedImage);
+          sourceRegions = detectFocusRegions(sourceCanvas);
+          focusSelection = 'full';
+          focusSelect.value = focusSelection;
+          focusSettings.hidden = sourceRegions.length !== 4;
+          focusNote.textContent = sourceRegions.length === 4
+            ? 'Four separate marks detected. A single mark stays sharper at 16×16.'
+            : 'Use the full logo, or choose pixel art mode to preserve hard edges.';
           updatePixelMode(detectPixelArt(file, loadedImage), false);
           if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
           previewObjectUrl = URL.createObjectURL(file);
@@ -382,6 +485,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           selectedFile = null;
           loadedImage = null;
           sourceCanvas = null;
+          sourceRegions = [];
           showError(error.message);
         }
       }
@@ -479,6 +583,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       changeButton.addEventListener('click', () => fileInput.click());
       downloadButton.addEventListener('click', downloadPackage);
       pixelModeInput.addEventListener('change', () => updatePixelMode(pixelModeInput.checked));
+      focusSelect.addEventListener('change', () => {
+        focusSelection = focusSelect.value;
+        renderPreviews();
+      });
 
       ['dragenter', 'dragover'].forEach((eventName) => {
         dropZone.addEventListener(eventName, (event) => {
@@ -554,12 +662,12 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .icon-frame.size-16 canvas { width: 32px; height: 32px; }
   .icon-frame.size-32 canvas { width: 40px; height: 40px; }
   .icon-frame.size-48 canvas { width: 48px; height: 48px; }
-  .icon-frame.size-180 { width: 88px; height: 88px; }
-  .icon-frame.size-180 canvas { width: 76px; height: 76px; }
-  .icon-frame.size-192 { width: 96px; height: 96px; }
-  .icon-frame.size-192 canvas { width: 84px; height: 84px; }
-  .icon-frame.size-512 { width: 112px; height: 112px; }
-  .icon-frame.size-512 canvas { width: 96px; height: 96px; }
+  .icon-frame.size-180 { width: 112px; height: 112px; }
+  .icon-frame.size-180 canvas { width: 100px; height: 100px; }
+  .icon-frame.size-192 { width: 120px; height: 120px; }
+  .icon-frame.size-192 canvas { width: 108px; height: 108px; }
+  .icon-frame.size-512 { width: 136px; height: 136px; }
+  .icon-frame.size-512 canvas { width: 124px; height: 124px; }
   .package-settings { display: flex; align-items: center; gap: 18px; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e3e2dc; }
   .package-settings label { flex: 0 0 auto; font-size: 13px; font-weight: 700; }
   .package-settings label span { color: #9b9c94; font-weight: 400; }
@@ -576,6 +684,12 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .pixel-copy { display: flex; flex-direction: column; gap: 2px; }
   .pixel-copy strong { color: #34362f; font-size: 12px; }
   .pixel-copy small { color: #92938b; font-size: 11px; }
+  .focus-settings { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 16px; padding: 14px 16px; border: 1px solid #e0dfd7; border-radius: 9px; background: #f7f6f1; }
+  .focus-copy { display: flex; flex-direction: column; gap: 3px; }
+  .focus-copy strong { color: #34362f; font-size: 12px; }
+  .focus-copy small { color: #7f8078; font-size: 11px; line-height: 1.45; }
+  .focus-settings select { min-width: 148px; padding: 9px 30px 9px 10px; border: 1px solid #d1d0c8; border-radius: 7px; outline: none; background: #fffefa; color: #34362f; font-size: 12px; }
+  .focus-settings select:focus { border-color: #91a91e; box-shadow: 0 0 0 3px rgba(145, 169, 30, .13); }
   .download-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; }
   .package-summary { display: inline-flex; align-items: center; gap: 9px; color: #73746c; font-size: 12px; }
   .package-summary strong { color: #34362f; }
@@ -611,6 +725,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     .source-frame { height: 140px; }
     .package-settings { align-items: flex-start; flex-direction: column; gap: 10px; }
     .package-settings input { width: 100%; }
+    .focus-settings { align-items: stretch; flex-direction: column; gap: 10px; }
+    .focus-settings select { width: 100%; }
     .download-row { align-items: stretch; flex-direction: column; }
     .download-button { justify-content: center; }
     .download-hint { text-align: left; }
