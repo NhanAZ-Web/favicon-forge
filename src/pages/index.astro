@@ -88,6 +88,17 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
             <input id="site-name" type="text" maxlength="60" autocomplete="off" />
           </div>
 
+          <div class="render-settings">
+            <label class="pixel-option" for="pixel-mode">
+              <input id="pixel-mode" type="checkbox" />
+              <span class="pixel-switch" aria-hidden="true"></span>
+              <span class="pixel-copy">
+                <strong>Pixel art mode</strong>
+                <small id="render-mode-note">Nearest-neighbor scaling for hard edges</small>
+              </span>
+            </label>
+          </div>
+
           <div class="download-row">
             <div class="package-summary">
               <span class="ready-icon">✓</span>
@@ -147,6 +158,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const fileMeta = $('#file-meta');
       const previewGrid = $('#preview-grid');
       const siteNameInput = $('#site-name');
+      const pixelModeInput = $('#pixel-mode');
+      const renderModeNote = $('#render-mode-note');
       const downloadButton = $('#download-button');
       const downloadHint = $('#download-hint');
       const changeButton = $('#change-button');
@@ -154,6 +167,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       let selectedFile = null;
       let loadedImage = null;
       let previewObjectUrl = null;
+      let pixelMode = false;
 
       function showError(message) {
         errorMessage.textContent = message;
@@ -193,14 +207,47 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         });
       }
 
+      function detectPixelArt(file, image) {
+        const sampleSize = Math.min(Math.max(image.naturalWidth, image.naturalHeight), 256);
+        const canvas = document.createElement('canvas');
+        canvas.width = sampleSize;
+        canvas.height = sampleSize;
+        const context = canvas.getContext('2d');
+        context.imageSmoothingEnabled = false;
+        context.drawImage(image, 0, 0, sampleSize, sampleSize);
+        const pixels = context.getImageData(0, 0, sampleSize, sampleSize).data;
+        const colors = new Set();
+
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index + 3] < 10) continue;
+          colors.add(`${pixels[index]},${pixels[index + 1]},${pixels[index + 2]},${pixels[index + 3]}`);
+          if (colors.size > 1024) return false;
+        }
+
+        return Math.max(image.naturalWidth, image.naturalHeight) <= 512
+          && file.size <= 300 * 1024
+          && colors.size <= 1024;
+      }
+
+      function updatePixelMode(enabled, rerender = true) {
+        pixelMode = enabled;
+        pixelModeInput.checked = enabled;
+        previewGrid.classList.toggle('pixel-mode', enabled);
+        sourcePreview.classList.toggle('pixelated', enabled);
+        renderModeNote.textContent = enabled
+          ? 'Pixel edges preserved with nearest-neighbor scaling'
+          : 'High-quality smoothing for regular logos';
+        if (rerender && loadedImage) renderPreviews();
+      }
+
       function createIconCanvas(size) {
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const context = canvas.getContext('2d');
         context.clearRect(0, 0, size, size);
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = 'high';
+        context.imageSmoothingEnabled = !pixelMode;
+        if (!pixelMode) context.imageSmoothingQuality = 'high';
 
         const padding = size < 64 ? 0.14 : 0.1;
         const available = size * (1 - padding * 2);
@@ -282,6 +329,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         try {
           selectedFile = file;
           loadedImage = await loadImage(file);
+          updatePixelMode(detectPixelArt(file, loadedImage), false);
           if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
           previewObjectUrl = URL.createObjectURL(file);
           sourcePreview.src = previewObjectUrl;
@@ -392,6 +440,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       fileInput.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
       changeButton.addEventListener('click', () => fileInput.click());
       downloadButton.addEventListener('click', downloadPackage);
+      pixelModeInput.addEventListener('change', () => updatePixelMode(pixelModeInput.checked));
 
       ['dragenter', 'dragover'].forEach((eventName) => {
         dropZone.addEventListener(eventName, (event) => {
@@ -456,12 +505,14 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .preview-label { margin-bottom: 12px; font-size: 9px; }
   .source-frame { width: 160px; height: 160px; display: grid; place-items: center; overflow: hidden; border: 1px solid #dfded7; border-radius: 12px; }
   .source-frame img { max-width: 82%; max-height: 82%; object-fit: contain; }
+  .source-frame img.pixelated { image-rendering: pixelated; }
   .checkerboard { background-color: #f8f8f3; background-image: linear-gradient(45deg, #e8e8df 25%, transparent 25%), linear-gradient(-45deg, #e8e8df 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8df 75%), linear-gradient(-45deg, transparent 75%, #e8e8df 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
   .file-meta { width: 160px; margin-top: 10px; overflow: hidden; color: #8a8b83; font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
   .preview-grid { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
   .preview-card { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #898a82; font-size: 10px; }
   .icon-frame { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; border: 1px solid #dfded7; border-radius: 10px; }
   .icon-frame canvas { display: block; max-width: 64px; max-height: 64px; image-rendering: auto; }
+  .preview-grid.pixel-mode .icon-frame canvas { image-rendering: pixelated; }
   .icon-frame.size-16 canvas { width: 32px; height: 32px; }
   .icon-frame.size-32 canvas { width: 40px; height: 40px; }
   .icon-frame.size-48 canvas { width: 48px; height: 48px; }
@@ -473,6 +524,17 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .package-settings label span { color: #9b9c94; font-weight: 400; }
   .package-settings input { width: min(300px, 100%); padding: 11px 12px; border: 1px solid #d7d6cf; border-radius: 7px; outline: none; background: #fffefa; color: #121416; font-size: 13px; }
   .package-settings input:focus { border-color: #91a91e; box-shadow: 0 0 0 3px rgba(145, 169, 30, .13); }
+  .render-settings { margin-top: 16px; }
+  .pixel-option { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+  .pixel-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .pixel-switch { position: relative; width: 34px; height: 20px; flex: 0 0 auto; border: 1px solid #c5c6bb; border-radius: 999px; background: #e7e7df; transition: background .2s, border-color .2s; }
+  .pixel-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: #fffefa; box-shadow: 0 1px 3px rgba(0,0,0,.16); transition: transform .2s; }
+  .pixel-option input:checked + .pixel-switch { border-color: #718400; background: #9db526; }
+  .pixel-option input:checked + .pixel-switch::after { transform: translateX(14px); }
+  .pixel-option input:focus-visible + .pixel-switch { outline: 3px solid rgba(145, 169, 30, .22); outline-offset: 2px; }
+  .pixel-copy { display: flex; flex-direction: column; gap: 2px; }
+  .pixel-copy strong { color: #34362f; font-size: 12px; }
+  .pixel-copy small { color: #92938b; font-size: 11px; }
   .download-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; }
   .package-summary { display: inline-flex; align-items: center; gap: 9px; color: #73746c; font-size: 12px; }
   .package-summary strong { color: #34362f; }
