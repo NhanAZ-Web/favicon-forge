@@ -1,0 +1,518 @@
+---
+const basePath = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#f4f3ee" />
+    <meta
+      name="description"
+      content="Generate a complete favicon package from your logo, directly in your browser."
+    />
+    <link rel="icon" href={`${basePath}favicon.svg`} type="image/svg+xml" />
+    <title>Favicon Forge — Generate favicons from your logo</title>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="Favicon Forge">
+          <span class="brand-mark" aria-hidden="true">F</span>
+          <span>Favicon Forge</span>
+        </a>
+        <span class="privacy-pill"><span class="privacy-dot"></span> Runs locally</span>
+      </header>
+
+      <section class="hero" aria-labelledby="page-title">
+        <div class="eyebrow">Logo → favicon package</div>
+        <h1 id="page-title">One logo.<br /><em>Every favicon.</em></h1>
+        <p class="hero-copy">
+          Drop your logo here. Favicon Forge creates every file you need for your website,
+          iPhone, Android and PWA — without uploading your image.
+        </p>
+      </section>
+
+      <section class="forge-card" aria-labelledby="forge-title">
+        <div class="section-heading">
+          <div>
+            <div class="step-label">01 <span>/</span> UPLOAD</div>
+            <h2 id="forge-title">Choose your logo</h2>
+          </div>
+          <span class="format-note">PNG · JPG · WEBP · SVG</span>
+        </div>
+
+        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="Choose or drop a logo">
+          <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+          <div class="drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M16 22V5m0 0-6 6m6-6 6 6M7 19v6h18v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="drop-title">Drop your logo here</div>
+          <div class="drop-subtitle">or <span>choose a file</span> from your computer</div>
+          <div class="drop-limit">Up to 10 MB · square or transparent logos work best</div>
+        </div>
+
+        <p class="error-message" id="error-message" role="alert" hidden></p>
+
+        <div class="result-panel" id="result-panel" hidden>
+          <div class="result-header">
+            <div>
+              <div class="step-label">02 <span>/</span> PREVIEW</div>
+              <h2>Your favicon package is ready</h2>
+            </div>
+            <button class="text-button" id="change-button" type="button">Choose another</button>
+          </div>
+
+          <div class="preview-layout">
+            <div class="source-preview">
+              <div class="preview-label">SOURCE LOGO</div>
+              <div class="source-frame checkerboard">
+                <img id="source-preview" alt="Selected logo" />
+              </div>
+              <div class="file-meta" id="file-meta"></div>
+            </div>
+
+            <div class="generated-previews">
+              <div class="preview-label">OUTPUT SIZES</div>
+              <div class="preview-grid" id="preview-grid"></div>
+            </div>
+          </div>
+
+          <div class="package-settings">
+            <label for="site-name">Website name <span>(used in the manifest)</span></label>
+            <input id="site-name" type="text" maxlength="60" autocomplete="off" />
+          </div>
+
+          <div class="download-row">
+            <div class="package-summary">
+              <span class="ready-icon">✓</span>
+              <span><strong>10 files</strong> · ICO, PNG, manifest &amp; setup guide</span>
+            </div>
+            <button class="download-button" id="download-button" type="button">
+              Download package <span aria-hidden="true">↓</span>
+            </button>
+          </div>
+          <div class="download-hint" id="download-hint">Unzip the package and copy the files into your Astro <code>public/</code> folder.</div>
+        </div>
+      </section>
+
+      <section class="how-it-works" aria-labelledby="how-title">
+        <div class="section-heading compact">
+          <div>
+            <div class="step-label">03 <span>/</span> READY TO USE</div>
+            <h2 id="how-title">Where to use it</h2>
+          </div>
+        </div>
+        <div class="use-grid">
+          <div class="use-item">
+            <span class="use-number">01</span>
+            <div><strong>Astro</strong><p>Copy the ZIP into <code>public/</code>, then add the HTML snippet to your layout.</p></div>
+          </div>
+          <div class="use-item">
+            <span class="use-number">02</span>
+            <div><strong>GitHub Pages</strong><p>Relative paths work with both project sites and custom domains.</p></div>
+          </div>
+          <div class="use-item">
+            <span class="use-number">03</span>
+            <div><strong>No upload</strong><p>Your image is read and processed only in this browser tab.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Favicon Forge</span>
+        <span>Built for the small details.</span>
+      </footer>
+    </main>
+
+    <script>
+      // @ts-nocheck — this small client-only module works directly with DOM and Canvas APIs.
+      import JSZip from 'jszip';
+
+      const MAX_FILE_SIZE = 10 * 1024 * 1024;
+      const OUTPUT_SIZES = [16, 32, 48, 180, 192, 512];
+      const PREVIEW_SIZES = [16, 32, 48, 180, 192, 512];
+      const $ = (selector) => document.querySelector(selector);
+
+      const dropZone = $('#drop-zone');
+      const fileInput = $('#file-input');
+      const errorMessage = $('#error-message');
+      const resultPanel = $('#result-panel');
+      const sourcePreview = $('#source-preview');
+      const fileMeta = $('#file-meta');
+      const previewGrid = $('#preview-grid');
+      const siteNameInput = $('#site-name');
+      const downloadButton = $('#download-button');
+      const downloadHint = $('#download-hint');
+      const changeButton = $('#change-button');
+
+      let selectedFile = null;
+      let loadedImage = null;
+      let previewObjectUrl = null;
+
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.hidden = false;
+      }
+
+      function clearError() {
+        errorMessage.hidden = true;
+        errorMessage.textContent = '';
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function fileNameToSiteName(fileName) {
+        const withoutExtension = fileName.replace(/\.[^/.]+$/, '');
+        const readable = withoutExtension.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return readable || 'My Website';
+      }
+
+      function loadImage(file) {
+        return new Promise((resolve, reject) => {
+          const objectUrl = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+          };
+          image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('This image could not be read. Try another PNG, JPG, WEBP or SVG file.'));
+          };
+          image.src = objectUrl;
+        });
+      }
+
+      function createIconCanvas(size) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, size, size);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+
+        const padding = size < 64 ? 0.14 : 0.1;
+        const available = size * (1 - padding * 2);
+        const scale = Math.min(available / loadedImage.naturalWidth, available / loadedImage.naturalHeight);
+        const width = loadedImage.naturalWidth * scale;
+        const height = loadedImage.naturalHeight * scale;
+        const x = (size - width) / 2;
+        const y = (size - height) / 2;
+        context.drawImage(loadedImage, x, y, width, height);
+        return canvas;
+      }
+
+      function canvasToBlob(canvas) {
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not create a PNG.')), 'image/png');
+        });
+      }
+
+      function createIco(entries) {
+        const headerSize = 6;
+        const directoryEntrySize = 16;
+        const dataOffset = headerSize + directoryEntrySize * entries.length;
+        const totalSize = dataOffset + entries.reduce((sum, entry) => sum + entry.bytes.length, 0);
+        const buffer = new ArrayBuffer(totalSize);
+        const view = new DataView(buffer);
+        const bytes = new Uint8Array(buffer);
+
+        view.setUint16(0, 0, true);
+        view.setUint16(2, 1, true);
+        view.setUint16(4, entries.length, true);
+
+        let offset = dataOffset;
+        entries.forEach((entry, index) => {
+          const directoryOffset = headerSize + index * directoryEntrySize;
+          view.setUint8(directoryOffset, entry.size === 256 ? 0 : entry.size);
+          view.setUint8(directoryOffset + 1, entry.size === 256 ? 0 : entry.size);
+          view.setUint8(directoryOffset + 2, 0);
+          view.setUint8(directoryOffset + 3, 0);
+          view.setUint16(directoryOffset + 4, 1, true);
+          view.setUint16(directoryOffset + 6, 32, true);
+          view.setUint32(directoryOffset + 8, entry.bytes.length, true);
+          view.setUint32(directoryOffset + 12, offset, true);
+          bytes.set(entry.bytes, offset);
+          offset += entry.bytes.length;
+        });
+
+        return new Blob([buffer], { type: 'image/x-icon' });
+      }
+
+      function renderPreviews() {
+        previewGrid.replaceChildren();
+        PREVIEW_SIZES.forEach((size) => {
+          const card = document.createElement('div');
+          card.className = 'preview-card';
+          const label = document.createElement('span');
+          label.textContent = `${size}×${size}`;
+          const frame = document.createElement('div');
+          frame.className = `icon-frame checkerboard size-${size}`;
+          const canvas = createIconCanvas(size);
+          canvas.setAttribute('aria-label', `Preview favicon ${size}x${size}`);
+          frame.append(canvas);
+          card.append(frame, label);
+          previewGrid.append(card);
+        });
+      }
+
+      async function handleFile(file) {
+        clearError();
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          showError('Please choose an image file.');
+          return;
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          showError('That file is too large. Please choose an image smaller than 10 MB.');
+          return;
+        }
+
+        try {
+          selectedFile = file;
+          loadedImage = await loadImage(file);
+          if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+          previewObjectUrl = URL.createObjectURL(file);
+          sourcePreview.src = previewObjectUrl;
+          sourcePreview.alt = `Logo ${file.name}`;
+          fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}`;
+          siteNameInput.value = fileNameToSiteName(file.name);
+          renderPreviews();
+          resultPanel.hidden = false;
+          dropZone.classList.add('has-result');
+          downloadHint.textContent = 'Unzip the package and copy the files into your Astro public/ folder.';
+          resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) {
+          selectedFile = null;
+          loadedImage = null;
+          showError(error.message);
+        }
+      }
+
+      function makeSnippet() {
+        return `<!-- Favicon Forge: copy this into your <head> -->
+<link rel="icon" href="./favicon-32x32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="./favicon-16x16.png" type="image/png" sizes="16x16">
+<link rel="icon" href="./favicon.ico" type="image/x-icon">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<link rel="manifest" href="./site.webmanifest">
+<meta name="theme-color" content="#ffffff">`;
+      }
+
+      function makeManifest(siteName) {
+        return JSON.stringify({
+          name: siteName,
+          short_name: siteName.slice(0, 20),
+          start_url: './',
+          scope: './',
+          display: 'standalone',
+          theme_color: '#ffffff',
+          background_color: '#ffffff',
+          icons: [
+            { src: './android-chrome-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: './android-chrome-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: './android-chrome-512x512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          ]
+        }, null, 2);
+      }
+
+      function makeReadme() {
+        return `FAVICON FORGE\n\nAstro / GitHub Pages\n\n1. Copy these files into your site's public/ folder (or next to index.html).\n2. Copy the contents of favicon-snippet.html into your page <head>.\n3. Build and deploy. The links use relative paths, so they work on GitHub Pages project sites.\n\nGenerated locally in your browser. The source logo was not uploaded.\n`;
+      }
+
+      async function buildZip() {
+        const sizes = new Map();
+        for (const size of OUTPUT_SIZES) {
+          sizes.set(size, await canvasToBlob(createIconCanvas(size)));
+        }
+
+        const icoEntries = [];
+        for (const size of [16, 32, 48]) {
+          icoEntries.push({ size, bytes: new Uint8Array(await sizes.get(size).arrayBuffer()) });
+        }
+
+        const siteName = siteNameInput.value.trim() || 'My Website';
+        const zip = new JSZip();
+        zip.file('favicon.ico', createIco(icoEntries));
+        zip.file('favicon-16x16.png', sizes.get(16));
+        zip.file('favicon-32x32.png', sizes.get(32));
+        zip.file('apple-touch-icon.png', sizes.get(180));
+        zip.file('android-chrome-192x192.png', sizes.get(192));
+        zip.file('android-chrome-512x512.png', sizes.get(512));
+        zip.file('android-chrome-512x512-maskable.png', sizes.get(512));
+        zip.file('site.webmanifest', makeManifest(siteName));
+        zip.file('favicon-snippet.html', makeSnippet());
+        zip.file('README.txt', makeReadme());
+        return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      }
+
+      async function downloadPackage() {
+        if (!selectedFile || !loadedImage) return;
+        downloadButton.disabled = true;
+        downloadButton.classList.add('is-loading');
+        downloadButton.innerHTML = 'Packaging <span class="spinner" aria-hidden="true"></span>';
+        try {
+          const zipBlob = await buildZip();
+          const url = URL.createObjectURL(zipBlob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = 'favicon-package.zip';
+          document.body.append(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+          downloadHint.textContent = 'Downloaded. Open favicon-snippet.html to copy the tags into your <head>.';
+        } catch (error) {
+          showError(`Could not create the ZIP file: ${error.message}`);
+        } finally {
+          downloadButton.disabled = false;
+          downloadButton.classList.remove('is-loading');
+          downloadButton.innerHTML = 'Download package <span aria-hidden="true">↓</span>';
+        }
+      }
+
+      dropZone.addEventListener('click', () => fileInput.click());
+      dropZone.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          fileInput.click();
+        }
+      });
+      fileInput.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
+      changeButton.addEventListener('click', () => fileInput.click());
+      downloadButton.addEventListener('click', downloadPackage);
+
+      ['dragenter', 'dragover'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.add('is-dragging');
+        });
+      });
+      ['dragleave', 'drop'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropZone.classList.remove('is-dragging');
+        });
+      });
+      dropZone.addEventListener('drop', (event) => handleFile(event.dataTransfer.files?.[0]));
+    </script>
+  </body>
+</html>
+
+<style>
+  :global(*) { box-sizing: border-box; }
+  :global(html) { background: #f4f3ee; scroll-behavior: smooth; }
+  :global(body) {
+    margin: 0;
+    color: #121416;
+    background: #f4f3ee;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  :global(button), :global(input) { font: inherit; }
+  :global(button) { cursor: pointer; }
+  :global(code) { font-family: "SFMono-Regular", Consolas, monospace; font-size: .88em; }
+  .page-shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+  .topbar { height: 84px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #d9d8d1; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; color: #121416; font-size: 14px; font-weight: 750; letter-spacing: -.02em; text-decoration: none; }
+  .brand-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: #121416; color: #d9ff57; font-size: 14px; font-weight: 800; }
+  .privacy-pill { display: inline-flex; align-items: center; gap: 8px; color: #676861; font-size: 12px; }
+  .privacy-dot { width: 7px; height: 7px; border-radius: 50%; background: #84a500; box-shadow: 0 0 0 4px rgba(132, 165, 0, .13); }
+  .hero { padding: 100px 0 72px; max-width: 760px; }
+  .eyebrow, .step-label, .preview-label { color: #7a7b73; font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+  .hero h1 { margin: 17px 0 22px; font-size: clamp(48px, 8vw, 92px); line-height: .94; letter-spacing: -.075em; font-weight: 750; }
+  .hero h1 em { color: #879e19; font-style: normal; }
+  .hero-copy { max-width: 560px; margin: 0; color: #686960; font-size: 18px; line-height: 1.6; letter-spacing: -.02em; }
+  .forge-card { padding: 34px; border: 1px solid #dad9d2; border-radius: 18px; background: #fbfaf6; box-shadow: 0 16px 50px rgba(39, 41, 29, .055); }
+  .section-heading, .result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+  .section-heading h2, .result-header h2 { margin: 9px 0 0; font-size: 25px; letter-spacing: -.045em; }
+  .step-label span { color: #c2c2ba; padding: 0 5px; }
+  .format-note { color: #8e8f87; font-size: 11px; letter-spacing: .08em; }
+  .drop-zone { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 30px; border: 1px dashed #bfc0b5; border-radius: 13px; background: #f7f6f1; text-align: center; transition: border-color .2s, background .2s, transform .2s; }
+  .drop-zone:hover, .drop-zone.is-dragging { border-color: #91a91e; background: #f2f7dc; }
+  .drop-zone.is-dragging { transform: scale(.995); }
+  .drop-zone.has-result { min-height: 150px; padding: 28px; }
+  .drop-icon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 18px; border-radius: 14px; background: #e8edc9; color: #718400; }
+  .drop-icon svg { width: 23px; }
+  .drop-title { font-size: 17px; font-weight: 700; letter-spacing: -.025em; }
+  .drop-subtitle { margin-top: 6px; color: #777970; font-size: 14px; }
+  .drop-subtitle span { color: #6f8100; text-decoration: underline; text-underline-offset: 3px; }
+  .drop-limit { margin-top: 20px; color: #a0a198; font-size: 11px; }
+  .error-message { margin: 16px 0 0; padding: 12px 14px; border-radius: 8px; background: #fff0ed; color: #a5402a; font-size: 13px; }
+  .result-panel { margin-top: 42px; padding-top: 38px; border-top: 1px solid #deddd6; }
+  .text-button { padding: 4px 0; border: 0; background: none; color: #788819; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
+  .preview-layout { display: grid; grid-template-columns: 190px 1fr; gap: 30px; margin-top: 28px; }
+  .preview-label { margin-bottom: 12px; font-size: 9px; }
+  .source-frame { width: 160px; height: 160px; display: grid; place-items: center; overflow: hidden; border: 1px solid #dfded7; border-radius: 12px; }
+  .source-frame img { max-width: 82%; max-height: 82%; object-fit: contain; }
+  .checkerboard { background-color: #f8f8f3; background-image: linear-gradient(45deg, #e8e8df 25%, transparent 25%), linear-gradient(-45deg, #e8e8df 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8df 75%), linear-gradient(-45deg, transparent 75%, #e8e8df 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
+  .file-meta { width: 160px; margin-top: 10px; overflow: hidden; color: #8a8b83; font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+  .preview-grid { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+  .preview-card { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #898a82; font-size: 10px; }
+  .icon-frame { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; border: 1px solid #dfded7; border-radius: 10px; }
+  .icon-frame canvas { display: block; max-width: 64px; max-height: 64px; image-rendering: auto; }
+  .icon-frame.size-16 canvas { width: 32px; height: 32px; }
+  .icon-frame.size-32 canvas { width: 40px; height: 40px; }
+  .icon-frame.size-48 canvas { width: 48px; height: 48px; }
+  .icon-frame.size-180 canvas { width: 58px; height: 58px; }
+  .icon-frame.size-192 canvas { width: 60px; height: 60px; }
+  .icon-frame.size-512 canvas { width: 64px; height: 64px; }
+  .package-settings { display: flex; align-items: center; gap: 18px; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e3e2dc; }
+  .package-settings label { flex: 0 0 auto; font-size: 13px; font-weight: 700; }
+  .package-settings label span { color: #9b9c94; font-weight: 400; }
+  .package-settings input { width: min(300px, 100%); padding: 11px 12px; border: 1px solid #d7d6cf; border-radius: 7px; outline: none; background: #fffefa; color: #121416; font-size: 13px; }
+  .package-settings input:focus { border-color: #91a91e; box-shadow: 0 0 0 3px rgba(145, 169, 30, .13); }
+  .download-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; }
+  .package-summary { display: inline-flex; align-items: center; gap: 9px; color: #73746c; font-size: 12px; }
+  .package-summary strong { color: #34362f; }
+  .ready-icon { width: 19px; height: 19px; display: grid; place-items: center; border-radius: 50%; background: #dcec87; color: #586900; font-size: 12px; font-weight: 800; }
+  .download-button { display: inline-flex; align-items: center; gap: 18px; padding: 14px 18px; border: 1px solid #121416; border-radius: 8px; background: #121416; color: #f9faee; font-size: 13px; font-weight: 700; transition: background .2s, transform .2s; }
+  .download-button:hover { background: #3a3e30; transform: translateY(-1px); }
+  .download-button:disabled { cursor: wait; opacity: .7; }
+  .download-button > span { color: #d9ff57; font-size: 18px; line-height: 10px; }
+  .spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.25); border-top-color: #d9ff57; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .download-hint { margin-top: 13px; color: #a0a198; font-size: 11px; text-align: right; }
+  .how-it-works { padding: 94px 0 80px; }
+  .section-heading.compact { margin-bottom: 26px; }
+  .use-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid #d9d8d1; }
+  .use-item { display: flex; gap: 18px; min-height: 136px; padding: 22px 24px 22px 0; border-right: 1px solid #d9d8d1; }
+  .use-item + .use-item { padding-left: 24px; }
+  .use-item:last-child { border-right: 0; }
+  .use-number { color: #9ba77a; font-family: Georgia, serif; font-size: 14px; }
+  .use-item strong { font-size: 14px; }
+  .use-item p { max-width: 220px; margin: 8px 0 0; color: #777870; font-size: 13px; line-height: 1.55; }
+  .footer { display: flex; justify-content: space-between; padding: 24px 0 34px; border-top: 1px solid #d9d8d1; color: #9b9c94; font-size: 11px; }
+  @media (max-width: 720px) {
+    .page-shell { width: min(100% - 28px, 560px); }
+    .topbar { height: 70px; }
+    .privacy-pill { font-size: 0; }
+    .hero { padding: 64px 0 48px; }
+    .hero h1 { font-size: clamp(50px, 16vw, 72px); }
+    .hero-copy { font-size: 16px; }
+    .forge-card { padding: 22px; }
+    .format-note { display: none; }
+    .preview-layout { grid-template-columns: 1fr; gap: 26px; }
+    .source-frame, .file-meta { width: 140px; }
+    .source-frame { height: 140px; }
+    .package-settings { align-items: flex-start; flex-direction: column; gap: 10px; }
+    .package-settings input { width: 100%; }
+    .download-row { align-items: stretch; flex-direction: column; }
+    .download-button { justify-content: center; }
+    .download-hint { text-align: left; }
+    .use-grid { grid-template-columns: 1fr; }
+    .use-item, .use-item + .use-item { min-height: 0; padding: 20px 0; border-right: 0; border-bottom: 1px solid #d9d8d1; }
+    .use-item:last-child { border-bottom: 0; }
+  }
+</style>
