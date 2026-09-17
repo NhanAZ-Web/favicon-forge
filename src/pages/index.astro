@@ -58,14 +58,14 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
             <div class="source-preview">
               <div class="preview-label">SOURCE LOGO</div>
               <div class="source-frame checkerboard">
-                <img id="source-preview" alt="Selected logo" />
+                <img class="pixelated" id="source-preview" alt="Selected logo" />
               </div>
               <div class="file-meta" id="file-meta"></div>
             </div>
 
             <div class="generated-previews">
               <div class="preview-label">OUTPUT SIZES</div>
-              <div class="preview-grid" id="preview-grid"></div>
+              <div class="preview-grid pixel-mode" id="preview-grid"></div>
               <p class="quality-note" id="quality-note" hidden></p>
             </div>
           </div>
@@ -76,16 +76,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
               <div class="package-settings">
                 <label for="site-name">Website name</label>
                 <input id="site-name" type="text" maxlength="60" autocomplete="off" />
-              </div>
-              <div class="render-settings">
-                <label class="pixel-option" for="pixel-mode">
-                  <input id="pixel-mode" type="checkbox" />
-                  <span class="pixel-switch" aria-hidden="true"></span>
-                  <span class="pixel-copy">
-                    <strong>Pixel art mode</strong>
-                    <small id="render-mode-note">Crisp pixels; upscaling adds no new detail</small>
-                  </span>
-                </label>
               </div>
             </div>
           </details>
@@ -124,8 +114,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const previewGrid = $('#preview-grid');
       const qualityNote = $('#quality-note');
       const siteNameInput = $('#site-name');
-      const pixelModeInput = $('#pixel-mode');
-      const renderModeNote = $('#render-mode-note');
       const downloadButton = $('#download-button');
       const downloadHint = $('#download-hint');
       const changeButton = $('#change-button');
@@ -133,7 +121,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       let selectedFile = null;
       let loadedImage = null;
       let previewObjectUrl = null;
-      let pixelMode = false;
 
       function showError(message) {
         errorMessage.textContent = message;
@@ -173,32 +160,13 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         });
       }
 
-      function detectPixelArt(file, image) {
-        // Small, compact raster assets are commonly pixel art or intentionally hard-edged.
-        // Prefer nearest-neighbor for them; regular high-resolution logos keep smoothing.
-        return Math.max(image.naturalWidth, image.naturalHeight) <= 512
-          && file.size <= 300 * 1024;
-      }
-
-      function updatePixelMode(enabled, rerender = true) {
-        pixelMode = enabled;
-        pixelModeInput.checked = enabled;
-        previewGrid.classList.toggle('pixel-mode', enabled);
-        sourcePreview.classList.toggle('pixelated', enabled);
-        renderModeNote.textContent = enabled
-          ? 'Crisp nearest-neighbor pixels; upscaling adds no new detail'
-          : 'Smooth interpolation for photos and regular logos';
-        if (rerender && loadedImage) renderPreviews();
-      }
-
       function createIconCanvas(size) {
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const context = canvas.getContext('2d');
         context.clearRect(0, 0, size, size);
-        context.imageSmoothingEnabled = !pixelMode;
-        if (!pixelMode) context.imageSmoothingQuality = 'high';
+        context.imageSmoothingEnabled = false;
 
         // Preserve the complete source canvas, including intentional transparent
         // margins. Cropping it changes the pixel grid and makes pixel art uneven.
@@ -211,12 +179,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         let x = (size - width) / 2;
         let y = (size - height) / 2;
 
-        if (pixelMode) {
-          width = Math.max(1, Math.round(width));
-          height = Math.max(1, Math.round(height));
-          x = Math.floor((size - width) / 2);
-          y = Math.floor((size - height) / 2);
-        }
+        width = Math.max(1, Math.round(width));
+        height = Math.max(1, Math.round(height));
+        x = Math.floor((size - width) / 2);
+        y = Math.floor((size - height) / 2);
 
         context.drawImage(
           source,
@@ -249,8 +215,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         previewCanvas.style.width = `${displaySize}px`;
         previewCanvas.style.height = `${displaySize}px`;
         const context = previewCanvas.getContext('2d');
-        context.imageSmoothingEnabled = !pixelMode;
-        if (!pixelMode) context.imageSmoothingQuality = 'high';
+        context.imageSmoothingEnabled = false;
         context.drawImage(outputCanvas, 0, 0, backingSize, backingSize);
         return previewCanvas;
       }
@@ -320,7 +285,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         try {
           selectedFile = file;
           loadedImage = await loadImage(file);
-          updatePixelMode(detectPixelArt(file, loadedImage), false);
           if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
           previewObjectUrl = URL.createObjectURL(file);
           sourcePreview.src = previewObjectUrl;
@@ -436,7 +400,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       fileInput.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
       changeButton.addEventListener('click', () => fileInput.click());
       downloadButton.addEventListener('click', downloadPackage);
-      pixelModeInput.addEventListener('change', () => updatePixelMode(pixelModeInput.checked));
 
       let previewResizeTimer;
       window.addEventListener('resize', () => {
@@ -525,17 +488,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .package-settings label span { color: #9b9c94; font-weight: 400; }
   .package-settings input { width: min(300px, 100%); padding: 11px 12px; border: 1px solid #d7d6cf; border-radius: 7px; outline: none; background: #fffefa; color: #121416; font-size: 13px; }
   .package-settings input:focus { border-color: #91a91e; box-shadow: 0 0 0 3px rgba(145, 169, 30, .13); }
-  .render-settings { margin-top: 16px; }
-  .pixel-option { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
-  .pixel-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  .pixel-switch { position: relative; width: 34px; height: 20px; flex: 0 0 auto; border: 1px solid #c5c6bb; border-radius: 999px; background: #e7e7df; transition: background .2s, border-color .2s; }
-  .pixel-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: #fffefa; box-shadow: 0 1px 3px rgba(0,0,0,.16); transition: transform .2s; }
-  .pixel-option input:checked + .pixel-switch { border-color: #718400; background: #9db526; }
-  .pixel-option input:checked + .pixel-switch::after { transform: translateX(14px); }
-  .pixel-option input:focus-visible + .pixel-switch { outline: 3px solid rgba(145, 169, 30, .22); outline-offset: 2px; }
-  .pixel-copy { display: flex; flex-direction: column; gap: 2px; }
-  .pixel-copy strong { color: #34362f; font-size: 12px; }
-  .pixel-copy small { color: #92938b; font-size: 11px; }
   .download-button { display: inline-flex; align-items: center; gap: 18px; padding: 14px 18px; border: 1px solid #121416; border-radius: 8px; background: #121416; color: #f9faee; font-size: 13px; font-weight: 700; transition: background .2s, transform .2s; }
   .download-button:hover { background: #3a3e30; transform: translateY(-1px); }
   .download-button:disabled { cursor: wait; opacity: .7; }
@@ -584,11 +536,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .quality-note { max-width: 520px; margin: 14px 0 0; color: #8a6330; font-size: 12px; line-height: 1.5; }
   .options { margin-top: 24px; border-top: 1px solid #e8e8e4; }
   .options summary { width: max-content; padding: 14px 0 0; color: #777; font-size: 12px; cursor: pointer; }
-  .options-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr); gap: 20px; padding-top: 16px; }
+  .options-grid { max-width: 360px; padding-top: 16px; }
   .options .package-settings { align-items: flex-start; flex-direction: column; gap: 7px; margin: 0; padding: 0; border: 0; }
   .options .package-settings label { font-size: 12px; }
   .options .package-settings input { width: 100%; }
-  .options .render-settings { display: flex; align-items: center; margin: 0; }
   .download-button { width: 100%; justify-content: center; margin-top: 24px; padding: 14px 18px; }
   .download-hint { margin: 10px 0 0; text-align: center; }
 
@@ -604,6 +555,5 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     .preview-layout { grid-template-columns: 1fr; gap: 22px; }
     .source-frame, .file-meta { width: min(256px, 100%); }
     .source-frame { height: auto; aspect-ratio: 1; }
-    .options-grid { grid-template-columns: 1fr; }
   }
 </style>
