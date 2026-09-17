@@ -488,13 +488,20 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .preview-label { margin-bottom: 12px; font-size: 9px; }
   .source-frame { width: 160px; height: 160px; display: grid; place-items: center; overflow: hidden; border: 1px solid #dfded7; border-radius: 12px; }
   .source-frame img { width: 100%; height: 100%; object-fit: contain; }
-  .source-frame img.pixelated { image-rendering: pixelated; }
+  .source-frame img.pixelated {
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
   .checkerboard { background-color: #f8f8f3; background-image: linear-gradient(45deg, #e8e8df 25%, transparent 25%), linear-gradient(-45deg, #e8e8df 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8df 75%), linear-gradient(-45deg, transparent 75%, #e8e8df 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
   .file-meta { width: 160px; margin-top: 10px; overflow: hidden; color: #8a8b83; font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
   .preview-grid { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
   .preview-card { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #898a82; font-size: 10px; }
   .icon-frame { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; border: 1px solid #dfded7; border-radius: 10px; }
   .icon-frame canvas { display: block; image-rendering: auto; }
+  .preview-grid.pixel-mode .icon-frame canvas {
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
   .icon-frame.size-16 canvas { width: 16px; height: 16px; }
   .icon-frame.size-32 canvas { width: 32px; height: 32px; }
   .icon-frame.size-48 canvas { width: 48px; height: 48px; }
