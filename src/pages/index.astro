@@ -166,6 +166,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
 
       let selectedFile = null;
       let loadedImage = null;
+      let sourceCanvas = null;
       let previewObjectUrl = null;
       let pixelMode = false;
 
@@ -225,6 +226,52 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         if (rerender && loadedImage) renderPreviews();
       }
 
+      function createTrimmedSource(image) {
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        const fullCanvas = document.createElement('canvas');
+        fullCanvas.width = width;
+        fullCanvas.height = height;
+        const fullContext = fullCanvas.getContext('2d');
+        fullContext.drawImage(image, 0, 0, width, height);
+
+        const pixels = fullContext.getImageData(0, 0, width, height).data;
+        let minX = width;
+        let minY = height;
+        let maxX = -1;
+        let maxY = -1;
+
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) {
+            const alpha = pixels[(y * width + x) * 4 + 3];
+            if (alpha > 8) {
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+          }
+        }
+
+        if (maxX < 0) return fullCanvas;
+
+        const trimmedCanvas = document.createElement('canvas');
+        trimmedCanvas.width = maxX - minX + 1;
+        trimmedCanvas.height = maxY - minY + 1;
+        trimmedCanvas.getContext('2d').drawImage(
+          fullCanvas,
+          minX,
+          minY,
+          trimmedCanvas.width,
+          trimmedCanvas.height,
+          0,
+          0,
+          trimmedCanvas.width,
+          trimmedCanvas.height,
+        );
+        return trimmedCanvas;
+      }
+
       function createIconCanvas(size) {
         const canvas = document.createElement('canvas');
         canvas.width = size;
@@ -234,14 +281,17 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         context.imageSmoothingEnabled = !pixelMode;
         if (!pixelMode) context.imageSmoothingQuality = 'high';
 
+        const source = sourceCanvas || loadedImage;
+        const sourceWidth = sourceCanvas ? sourceCanvas.width : loadedImage.naturalWidth;
+        const sourceHeight = sourceCanvas ? sourceCanvas.height : loadedImage.naturalHeight;
         const padding = size < 64 ? 0.14 : 0.1;
         const available = size * (1 - padding * 2);
-        const scale = Math.min(available / loadedImage.naturalWidth, available / loadedImage.naturalHeight);
-        const width = loadedImage.naturalWidth * scale;
-        const height = loadedImage.naturalHeight * scale;
+        const scale = Math.min(available / sourceWidth, available / sourceHeight);
+        const width = sourceWidth * scale;
+        const height = sourceHeight * scale;
         const x = (size - width) / 2;
         const y = (size - height) / 2;
-        context.drawImage(loadedImage, x, y, width, height);
+        context.drawImage(source, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
         return canvas;
       }
 
@@ -314,12 +364,14 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         try {
           selectedFile = file;
           loadedImage = await loadImage(file);
+          sourceCanvas = createTrimmedSource(loadedImage);
           updatePixelMode(detectPixelArt(file, loadedImage), false);
           if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
           previewObjectUrl = URL.createObjectURL(file);
           sourcePreview.src = previewObjectUrl;
           sourcePreview.alt = `Logo ${file.name}`;
-          fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}`;
+          const trimmed = sourceCanvas.width !== loadedImage.naturalWidth || sourceCanvas.height !== loadedImage.naturalHeight;
+          fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}${trimmed ? ' · transparent margins cropped' : ''}`;
           siteNameInput.value = fileNameToSiteName(file.name);
           renderPreviews();
           resultPanel.hidden = false;
@@ -329,6 +381,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         } catch (error) {
           selectedFile = null;
           loadedImage = null;
+          sourceCanvas = null;
           showError(error.message);
         }
       }
