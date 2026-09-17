@@ -241,15 +241,17 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       function createPreviewCanvas(size) {
         const outputCanvas = createIconCanvas(size);
         const displaySize = PREVIEW_DISPLAY_SIZES[size];
-        if (displaySize === size) return outputCanvas;
-
+        const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+        const backingSize = Math.round(displaySize * pixelRatio);
         const previewCanvas = document.createElement('canvas');
-        previewCanvas.width = displaySize;
-        previewCanvas.height = displaySize;
+        previewCanvas.width = backingSize;
+        previewCanvas.height = backingSize;
+        previewCanvas.style.width = `${displaySize}px`;
+        previewCanvas.style.height = `${displaySize}px`;
         const context = previewCanvas.getContext('2d');
         context.imageSmoothingEnabled = !pixelMode;
         if (!pixelMode) context.imageSmoothingQuality = 'high';
-        context.drawImage(outputCanvas, 0, 0, displaySize, displaySize);
+        context.drawImage(outputCanvas, 0, 0, backingSize, backingSize);
         return previewCanvas;
       }
 
@@ -435,6 +437,13 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       changeButton.addEventListener('click', () => fileInput.click());
       downloadButton.addEventListener('click', downloadPackage);
       pixelModeInput.addEventListener('change', () => updatePixelMode(pixelModeInput.checked));
+
+      let previewResizeTimer;
+      window.addEventListener('resize', () => {
+        if (!loadedImage) return;
+        window.clearTimeout(previewResizeTimer);
+        previewResizeTimer = window.setTimeout(renderPreviews, 120);
+      });
 
       ['dragenter', 'dragover'].forEach((eventName) => {
         dropZone.addEventListener(eventName, (event) => {
