@@ -162,6 +162,14 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const MAX_FILE_SIZE = 10 * 1024 * 1024;
       const OUTPUT_SIZES = [16, 32, 48, 180, 192, 512];
       const PREVIEW_SIZES = [16, 32, 48, 180, 192, 512];
+      const PREVIEW_DISPLAY_SIZES = {
+        16: 32,
+        32: 40,
+        48: 48,
+        180: 100,
+        192: 108,
+        512: 124,
+      };
       const $ = (selector) => document.querySelector(selector);
 
       const dropZone = $('#drop-zone');
@@ -437,8 +445,12 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           label.textContent = `${size}×${size}`;
           const frame = document.createElement('div');
           frame.className = `icon-frame checkerboard size-${size}`;
-          const canvas = createIconCanvas(size);
-          canvas.setAttribute('aria-label', `Preview favicon ${size}x${size}`);
+          // Render the preview directly at its display size. Rendering a 180/192/512
+          // canvas first and then shrinking it with CSS makes the browser filter
+          // pixel-art a second time, which looks soft even when the downloaded PNG is sharp.
+          const displaySize = PREVIEW_DISPLAY_SIZES[size];
+          const canvas = createIconCanvas(displaySize);
+          canvas.setAttribute('aria-label', `Preview favicon ${size}x${size}, enlarged for display`);
           frame.append(canvas);
           card.append(frame, label);
           previewGrid.append(card);
