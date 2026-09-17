@@ -9,24 +9,19 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="theme-color" content="#f4f3ee" />
+    <meta name="theme-color" content="#eaf5ff" />
     <meta
       name="description"
       content="Generate a complete favicon package from your logo, directly in your browser."
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="icon" href={`${basePath}favicon.svg`} type="image/svg+xml" />
     <title>Favicon Forge — Generate favicons from your logo</title>
   </head>
   <body>
     <main class="page-shell">
-      <header class="topbar">
-        <a class="brand" href="./" aria-label="Favicon Forge">
-          <span class="brand-mark" aria-hidden="true">F</span>
-          <span>Favicon Forge</span>
-        </a>
-        <span class="privacy-pill"><span class="privacy-dot"></span> Private · runs locally</span>
-      </header>
-
       <section class="intro" aria-labelledby="page-title">
         <h1 id="page-title">Generate favicons</h1>
         <p>Drop one logo. Download the complete package.</p>
@@ -51,7 +46,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         <div class="result-panel" id="result-panel" hidden>
           <div class="result-header">
             <h2>Preview</h2>
-            <button class="text-button" id="change-button" type="button">Choose another</button>
+            <button class="text-button" id="change-button" type="button">Replace logo</button>
           </div>
 
           <div class="preview-layout">
@@ -65,25 +60,15 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
 
             <div class="generated-previews">
               <div class="preview-label">OUTPUT SIZES</div>
-              <div class="preview-grid pixel-mode" id="preview-grid"></div>
-              <p class="quality-note" id="quality-note" hidden></p>
-            </div>
-          </div>
-
-          <details class="options">
-            <summary>Options</summary>
-            <div class="options-grid">
-              <div class="package-settings">
-                <label for="site-name">Website name</label>
-                <input id="site-name" type="text" maxlength="60" autocomplete="off" />
+              <div class="output-surface checkerboard">
+                <div class="preview-grid pixel-mode" id="preview-grid"></div>
               </div>
             </div>
-          </details>
+          </div>
 
           <button class="download-button" id="download-button" type="button">
             Download favicon package <span aria-hidden="true">↓</span>
           </button>
-          <p class="download-hint" id="download-hint">10 files · ICO, PNG, manifest and setup guide</p>
         </div>
       </section>
     </main>
@@ -96,12 +81,12 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const OUTPUT_SIZES = [16, 32, 48, 180, 192, 512];
       const PREVIEW_SIZES = [16, 32, 48, 180, 192, 512];
       const PREVIEW_DISPLAY_SIZES = {
-        16: 16,
-        32: 32,
-        48: 48,
-        180: 180,
-        192: 192,
-        512: 256,
+        16: 80,
+        32: 80,
+        48: 80,
+        180: 80,
+        192: 80,
+        512: 80,
       };
       const $ = (selector) => document.querySelector(selector);
 
@@ -112,10 +97,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const sourcePreview = $('#source-preview');
       const fileMeta = $('#file-meta');
       const previewGrid = $('#preview-grid');
-      const qualityNote = $('#quality-note');
-      const siteNameInput = $('#site-name');
       const downloadButton = $('#download-button');
-      const downloadHint = $('#download-hint');
       const changeButton = $('#change-button');
 
       let selectedFile = null;
@@ -184,17 +166,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         x = Math.floor((size - width) / 2);
         y = Math.floor((size - height) / 2);
 
-        context.drawImage(
-          source,
-          0,
-          0,
-          sourceWidth,
-          sourceHeight,
-          x,
-          y,
-          width,
-          height,
-        );
+        context.drawImage(source, x, y, width, height);
         return canvas;
       }
 
@@ -204,20 +176,22 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         });
       }
 
-      function createPreviewCanvas(size) {
+      function createPreviewImage(size) {
         const outputCanvas = createIconCanvas(size);
         const displaySize = PREVIEW_DISPLAY_SIZES[size];
-        const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
-        const backingSize = Math.round(displaySize * pixelRatio);
         const previewCanvas = document.createElement('canvas');
-        previewCanvas.width = backingSize;
-        previewCanvas.height = backingSize;
-        previewCanvas.style.width = `${displaySize}px`;
-        previewCanvas.style.height = `${displaySize}px`;
+        previewCanvas.width = displaySize;
+        previewCanvas.height = displaySize;
         const context = previewCanvas.getContext('2d');
         context.imageSmoothingEnabled = false;
-        context.drawImage(outputCanvas, 0, 0, backingSize, backingSize);
-        return previewCanvas;
+        const previewScale = displaySize / size;
+        context.setTransform(previewScale, 0, 0, previewScale, 0, 0);
+        context.drawImage(outputCanvas, 0, 0);
+        const previewImage = document.createElement('img');
+        previewImage.src = previewCanvas.toDataURL('image/png');
+        previewImage.width = displaySize;
+        previewImage.height = displaySize;
+        return previewImage;
       }
 
       function createIco(entries) {
@@ -259,12 +233,11 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           const label = document.createElement('span');
           label.textContent = `${size}×${size}`;
           const frame = document.createElement('div');
-          frame.className = `icon-frame checkerboard size-${size}`;
-          // Build the real output first, then make a separate preview canvas.
-          // Its bitmap and CSS dimensions match, so the browser never rescales it.
-          const canvas = createPreviewCanvas(size);
-          canvas.setAttribute('aria-label', `Preview favicon ${size}x${size}`);
-          frame.append(canvas);
+          frame.className = `icon-frame size-${size}`;
+          // Preview the exact generated PNG while keeping every card the same size.
+          const image = createPreviewImage(size);
+          image.alt = `Preview favicon ${size}x${size}`;
+          frame.append(image);
           card.append(frame, label);
           previewGrid.append(card);
         });
@@ -290,16 +263,9 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           sourcePreview.src = previewObjectUrl;
           sourcePreview.alt = `Logo ${file.name}`;
           fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}`;
-          const largestSide = Math.max(loadedImage.naturalWidth, loadedImage.naturalHeight);
-          qualityNote.hidden = largestSide >= 512;
-          qualityNote.textContent = largestSide < 512
-            ? `Source is ${loadedImage.naturalWidth}×${loadedImage.naturalHeight}. The 512×512 file is enlarged and cannot contain more detail than the source.`
-            : '';
-          siteNameInput.value = fileNameToSiteName(file.name);
           renderPreviews();
           resultPanel.hidden = false;
           dropZone.hidden = true;
-          downloadHint.textContent = '10 files · ICO, PNG, manifest and setup guide';
           resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (error) {
           selectedFile = null;
@@ -350,7 +316,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           icoEntries.push({ size, bytes: new Uint8Array(await sizes.get(size).arrayBuffer()) });
         }
 
-        const siteName = siteNameInput.value.trim() || 'My Website';
+        const siteName = fileNameToSiteName(selectedFile?.name || 'My Website');
         const zip = new JSZip();
         zip.file('favicon.ico', createIco(icoEntries));
         zip.file('favicon-16x16.png', sizes.get(16));
@@ -380,7 +346,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           anchor.click();
           anchor.remove();
           URL.revokeObjectURL(url);
-          downloadHint.textContent = 'Downloaded · unzip and copy the files into your public folder';
         } catch (error) {
           showError(`Could not create the ZIP file: ${error.message}`);
         } finally {
@@ -401,13 +366,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       changeButton.addEventListener('click', () => fileInput.click());
       downloadButton.addEventListener('click', downloadPackage);
 
-      let previewResizeTimer;
-      window.addEventListener('resize', () => {
-        if (!loadedImage) return;
-        window.clearTimeout(previewResizeTimer);
-        previewResizeTimer = window.setTimeout(renderPreviews, 120);
-      });
-
       ['dragenter', 'dragover'].forEach((eventName) => {
         dropZone.addEventListener(eventName, (event) => {
           event.preventDefault();
@@ -427,133 +385,293 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
 
 <style>
   :global(*) { box-sizing: border-box; }
-  :global(html) { background: #f4f3ee; scroll-behavior: smooth; }
+  :global(html) {
+    background: #f3f9fe;
+    scroll-behavior: smooth;
+  }
   :global(body) {
     margin: 0;
-    color: #121416;
-    background: #f4f3ee;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #18334d;
+    background: #f3f9fe;
+    font-family: "Space Grotesk", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  :global(button), :global(input) { font: inherit; }
+  :global(button), :global(input), :global(code) { font: inherit; }
   :global(button) { cursor: pointer; }
-  :global(code) { font-family: "SFMono-Regular", Consolas, monospace; font-size: .88em; }
-  .page-shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
-  .topbar { height: 84px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #d9d8d1; }
-  .brand { display: inline-flex; align-items: center; gap: 10px; color: #121416; font-size: 14px; font-weight: 750; letter-spacing: -.02em; text-decoration: none; }
-  .brand-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: #121416; color: #d9ff57; font-size: 14px; font-weight: 800; }
-  .privacy-pill { display: inline-flex; align-items: center; gap: 8px; color: #676861; font-size: 12px; }
-  .privacy-dot { width: 7px; height: 7px; border-radius: 50%; background: #84a500; box-shadow: 0 0 0 4px rgba(132, 165, 0, .13); }
-  .preview-label { color: #7a7b73; font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
-  .result-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
-  .drop-zone { min-height: 310px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 30px; border: 1px dashed #bfc0b5; border-radius: 13px; background: #f7f6f1; text-align: center; transition: border-color .2s, background .2s, transform .2s; }
-  .drop-zone:hover, .drop-zone.is-dragging { border-color: #91a91e; background: #f2f7dc; }
+
+  .page-shell {
+    width: min(960px, calc(100% - 32px));
+    margin: 0 auto;
+  }
+  .intro {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 44px 4px 22px;
+  }
+  .intro h1,
+  .intro p {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.35;
+    letter-spacing: -.025em;
+  }
+  .intro h1 { font-weight: 700; }
+  .intro p { color: #6c8297; font-weight: 400; }
+
+  .workspace {
+    margin-bottom: 48px;
+    padding: 24px;
+    border: 1px solid #cfe0ee;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 18px 42px rgba(68, 112, 148, .08);
+  }
+  .drop-zone {
+    min-height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    border: 1px dashed #9fc7e5;
+    border-radius: 12px;
+    background: #f4faff;
+    text-align: center;
+    transition: border-color .2s, background .2s, transform .2s;
+  }
+  .drop-zone[hidden] { display: none; }
+  .drop-zone:hover,
+  .drop-zone.is-dragging {
+    border-color: #69a8d8;
+    background: #e9f5fe;
+  }
   .drop-zone.is-dragging { transform: scale(.995); }
-  .drop-icon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 18px; border-radius: 14px; background: #e8edc9; color: #718400; }
-  .drop-icon svg { width: 23px; }
-  .drop-title { font-size: 17px; font-weight: 700; letter-spacing: -.025em; }
-  .drop-subtitle { margin-top: 6px; color: #777970; font-size: 14px; }
-  .error-message { margin: 16px 0 0; padding: 12px 14px; border-radius: 8px; background: #fff0ed; color: #a5402a; font-size: 13px; }
-  .result-panel { margin-top: 42px; padding-top: 38px; border-top: 1px solid #deddd6; }
-  .text-button { padding: 4px 0; border: 0; background: none; color: #788819; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
-  .preview-layout { display: grid; grid-template-columns: 190px 1fr; gap: 30px; margin-top: 28px; }
-  .preview-label { margin-bottom: 12px; font-size: 9px; }
-  .source-frame { width: 160px; height: 160px; display: grid; place-items: center; overflow: hidden; border: 1px solid #dfded7; border-radius: 12px; }
-  .source-frame img { width: 100%; height: 100%; object-fit: contain; }
-  .source-frame img.pixelated {
-    image-rendering: crisp-edges;
-    image-rendering: pixelated;
+  .drop-icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 12px;
+    background: #dceefa;
+    color: #4b8fbe;
   }
-  .checkerboard { background-color: #f8f8f3; background-image: linear-gradient(45deg, #e8e8df 25%, transparent 25%), linear-gradient(-45deg, #e8e8df 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8df 75%), linear-gradient(-45deg, transparent 75%, #e8e8df 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
-  .file-meta { width: 160px; margin-top: 10px; overflow: hidden; color: #8a8b83; font-size: 11px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
-  .preview-grid { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
-  .preview-card { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #898a82; font-size: 10px; }
-  .icon-frame { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; border: 1px solid #dfded7; border-radius: 10px; }
-  .icon-frame canvas { display: block; image-rendering: auto; }
-  .preview-grid.pixel-mode .icon-frame canvas {
-    image-rendering: crisp-edges;
-    image-rendering: pixelated;
+  .drop-icon svg { width: 21px; }
+  .drop-title {
+    color: #244b6c;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    text-align: left;
   }
-  .icon-frame.size-16 canvas { width: 16px; height: 16px; }
-  .icon-frame.size-32 canvas { width: 32px; height: 32px; }
-  .icon-frame.size-48 canvas { width: 48px; height: 48px; }
-  .icon-frame.size-180 { width: 192px; height: 192px; }
-  .icon-frame.size-180 canvas { width: 180px; height: 180px; }
-  .icon-frame.size-192 { width: 204px; height: 204px; }
-  .icon-frame.size-192 canvas { width: 192px; height: 192px; }
-  .icon-frame.size-512 { width: 268px; height: 268px; }
-  .icon-frame.size-512 canvas { width: 256px; height: 256px; }
-  .package-settings { display: flex; align-items: center; gap: 18px; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e3e2dc; }
-  .package-settings label { flex: 0 0 auto; font-size: 13px; font-weight: 700; }
-  .package-settings label span { color: #9b9c94; font-weight: 400; }
-  .package-settings input { width: min(300px, 100%); padding: 11px 12px; border: 1px solid #d7d6cf; border-radius: 7px; outline: none; background: #fffefa; color: #121416; font-size: 13px; }
-  .package-settings input:focus { border-color: #91a91e; box-shadow: 0 0 0 3px rgba(145, 169, 30, .13); }
-  .download-button { display: inline-flex; align-items: center; gap: 18px; padding: 14px 18px; border: 1px solid #121416; border-radius: 8px; background: #121416; color: #f9faee; font-size: 13px; font-weight: 700; transition: background .2s, transform .2s; }
-  .download-button:hover { background: #3a3e30; transform: translateY(-1px); }
-  .download-button:disabled { cursor: wait; opacity: .7; }
-  .download-button > span { color: #d9ff57; font-size: 18px; line-height: 10px; }
-  .spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.25); border-top-color: #d9ff57; border-radius: 50%; animation: spin .7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .download-hint { margin-top: 13px; color: #a0a198; font-size: 11px; text-align: right; }
-  @media (max-width: 720px) {
-    .page-shell { width: min(100% - 28px, 560px); }
-    .topbar { height: 70px; }
-    .privacy-pill { font-size: 0; }
-    .preview-layout { grid-template-columns: 1fr; gap: 26px; }
-    .source-frame, .file-meta { width: 140px; }
-    .source-frame { height: 140px; }
-    .package-settings { align-items: flex-start; flex-direction: column; gap: 10px; }
-    .package-settings input { width: 100%; }
-    .download-button { justify-content: center; }
-    .download-hint { text-align: left; }
+  .drop-subtitle {
+    margin-top: 4px;
+    color: #7890a4;
+    font-size: 12px;
+    text-align: left;
+  }
+  .error-message {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border-radius: 9px;
+    background: #fff0ed;
+    color: #a5402a;
+    font-size: 13px;
   }
 
-  /* Minimal interface */
-  :global(html), :global(body) { background: #fff; }
-  .page-shell { width: min(960px, calc(100% - 32px)); }
-  .topbar { height: 64px; border-color: #e7e7e3; }
-  .brand { font-size: 14px; }
-  .brand-mark { width: 26px; height: 26px; border-radius: 7px; }
-  .privacy-pill { color: #777; }
-  .privacy-dot { width: 6px; height: 6px; box-shadow: none; }
-  .intro { padding: 54px 0 28px; }
-  .intro h1 { margin: 0; font-size: clamp(36px, 7vw, 58px); line-height: 1; letter-spacing: -.055em; }
-  .intro p { margin: 14px 0 0; color: #74746f; font-size: 15px; }
-  .workspace { margin-bottom: 48px; padding: 24px; border: 1px solid #e2e2de; border-radius: 14px; }
-  .drop-zone { min-height: 180px; flex-direction: row; gap: 16px; margin: 0; border-radius: 10px; background: #fafaf8; }
-  .drop-zone[hidden] { display: none; }
-  .drop-icon { width: 40px; height: 40px; margin: 0; border-radius: 10px; }
-  .drop-icon svg { width: 20px; }
-  .drop-title { font-size: 15px; text-align: left; }
-  .drop-subtitle { margin-top: 4px; font-size: 12px; text-align: left; }
-  .result-panel { margin: 0; padding: 0; border: 0; }
-  .result-header { align-items: center; }
-  .result-header h2 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
-  .preview-layout { grid-template-columns: 256px 1fr; gap: 24px; margin-top: 22px; }
-  .preview-label { margin-bottom: 9px; color: #8a8a84; }
-  .source-frame { width: 256px; height: 256px; }
-  .file-meta { width: 256px; }
-  .quality-note { max-width: 520px; margin: 14px 0 0; color: #8a6330; font-size: 12px; line-height: 1.5; }
-  .options { margin-top: 24px; border-top: 1px solid #e8e8e4; }
-  .options summary { width: max-content; padding: 14px 0 0; color: #777; font-size: 12px; cursor: pointer; }
-  .options-grid { max-width: 360px; padding-top: 16px; }
-  .options .package-settings { align-items: flex-start; flex-direction: column; gap: 7px; margin: 0; padding: 0; border: 0; }
-  .options .package-settings label { font-size: 12px; }
-  .options .package-settings input { width: 100%; }
-  .download-button { width: 100%; justify-content: center; margin-top: 24px; padding: 14px 18px; }
-  .download-hint { margin: 10px 0 0; text-align: center; }
+  .result-panel { margin: 0; padding: 0; }
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .result-header h2 {
+    margin: 0;
+    color: #18334d;
+    font-size: 20px;
+    letter-spacing: -.03em;
+  }
+  .text-button {
+    padding: 9px 12px;
+    border: 1px solid #b9d7ed;
+    border-radius: 9px;
+    background: #edf7ff;
+    color: #3277a7;
+    font-size: 12px;
+    font-weight: 600;
+    transition: background .2s, border-color .2s, transform .2s;
+  }
+  .text-button:hover {
+    border-color: #8ebfe0;
+    background: #dff1fd;
+    transform: translateY(-1px);
+  }
+
+  .preview-layout {
+    display: grid;
+    grid-template-columns: 256px minmax(0, 1fr);
+    gap: 24px;
+    margin-top: 22px;
+  }
+  .preview-label {
+    margin-bottom: 9px;
+    color: #69849a;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+  .source-frame,
+  .output-surface {
+    overflow: hidden;
+    border: 1px solid #cfe0ee;
+    border-radius: 12px;
+  }
+  .source-frame {
+    width: 256px;
+    height: 256px;
+    display: grid;
+    place-items: center;
+  }
+  .source-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .source-frame img.pixelated,
+  .preview-grid.pixel-mode .icon-frame img {
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+  .checkerboard {
+    background-color: #f8fcff;
+    background-image:
+      linear-gradient(45deg, #e5f1f9 25%, transparent 25%),
+      linear-gradient(-45deg, #e5f1f9 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #e5f1f9 75%),
+      linear-gradient(-45deg, transparent 75%, #e5f1f9 75%);
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+    background-size: 14px 14px;
+  }
+  .file-meta {
+    width: 256px;
+    margin-top: 10px;
+    overflow: hidden;
+    color: #7890a4;
+    font-size: 11px;
+    line-height: 1.5;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .output-surface {
+    min-height: 256px;
+    padding: 12px;
+  }
+  .preview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .preview-card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 4px 7px;
+    border: 1px solid rgba(166, 201, 225, .75);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .78);
+    color: #59778f;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .icon-frame {
+    width: 80px;
+    height: 80px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .icon-frame img {
+    width: 80px;
+    height: 80px;
+    display: block;
+    object-fit: contain;
+  }
+
+  .download-button {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 24px;
+    padding: 14px 18px;
+    border: 1px solid #679fca;
+    border-radius: 10px;
+    background: #72add7;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 8px 20px rgba(72, 135, 181, .18);
+    transition: background .2s, border-color .2s, transform .2s;
+  }
+  .download-button:hover {
+    border-color: #4b8fbe;
+    background: #5c9dcd;
+    transform: translateY(-1px);
+  }
+  .download-button:disabled { cursor: wait; opacity: .7; }
+  .download-button > span {
+    color: #eff9ff;
+    font-size: 18px;
+    line-height: 10px;
+  }
+  .spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(255, 255, 255, .35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 720px) {
     .page-shell { width: calc(100% - 20px); }
-    .topbar { height: 56px; }
-    .privacy-pill { display: none; }
-    .intro { padding: 34px 4px 22px; }
-    .intro h1 { font-size: 40px; }
+    .intro {
+      gap: 6px 8px;
+      padding: 28px 4px 18px;
+    }
+    .intro h1,
+    .intro p { font-size: 17px; }
     .workspace { padding: 16px; }
-    .drop-zone { min-height: 160px; flex-direction: column; }
-    .drop-title, .drop-subtitle { text-align: center; }
-    .preview-layout { grid-template-columns: 1fr; gap: 22px; }
-    .source-frame, .file-meta { width: min(256px, 100%); }
-    .source-frame { height: auto; aspect-ratio: 1; }
+    .drop-zone {
+      min-height: 160px;
+      flex-direction: column;
+    }
+    .drop-title,
+    .drop-subtitle { text-align: center; }
+    .preview-layout {
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    .source-frame,
+    .file-meta { width: min(256px, 100%); }
+    .source-frame {
+      height: auto;
+      aspect-ratio: 1;
+    }
+    .output-surface { padding: 10px; }
+    .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 390px) {
+    .result-header { align-items: flex-start; }
+    .text-button { padding: 8px 10px; }
+    .preview-grid { grid-template-columns: 1fr; }
   }
 </style>
