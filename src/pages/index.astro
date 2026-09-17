@@ -42,7 +42,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           </div>
           <div>
             <div class="drop-title">Drop or choose a logo</div>
-            <div class="drop-subtitle">PNG, JPG, WEBP or SVG · max 10 MB</div>
+            <div class="drop-subtitle">PNG, JPG, WEBP or SVG · 512×512 or larger recommended</div>
           </div>
         </div>
 
@@ -66,6 +66,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
             <div class="generated-previews">
               <div class="preview-label">OUTPUT SIZES</div>
               <div class="preview-grid" id="preview-grid"></div>
+              <p class="quality-note" id="quality-note" hidden></p>
             </div>
           </div>
 
@@ -82,7 +83,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
                   <span class="pixel-switch" aria-hidden="true"></span>
                   <span class="pixel-copy">
                     <strong>Pixel art mode</strong>
-                    <small id="render-mode-note">Nearest-neighbor scaling for hard edges</small>
+                    <small id="render-mode-note">Crisp pixels; upscaling adds no new detail</small>
                   </span>
                 </label>
               </div>
@@ -121,6 +122,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       const sourcePreview = $('#source-preview');
       const fileMeta = $('#file-meta');
       const previewGrid = $('#preview-grid');
+      const qualityNote = $('#quality-note');
       const siteNameInput = $('#site-name');
       const pixelModeInput = $('#pixel-mode');
       const renderModeNote = $('#render-mode-note');
@@ -184,8 +186,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         previewGrid.classList.toggle('pixel-mode', enabled);
         sourcePreview.classList.toggle('pixelated', enabled);
         renderModeNote.textContent = enabled
-          ? 'Pixel edges preserved with nearest-neighbor scaling'
-          : 'High-quality smoothing for regular logos';
+          ? 'Crisp nearest-neighbor pixels; upscaling adds no new detail'
+          : 'Smooth interpolation for photos and regular logos';
         if (rerender && loadedImage) renderPreviews();
       }
 
@@ -322,6 +324,11 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           sourcePreview.src = previewObjectUrl;
           sourcePreview.alt = `Logo ${file.name}`;
           fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}`;
+          const largestSide = Math.max(loadedImage.naturalWidth, loadedImage.naturalHeight);
+          qualityNote.hidden = largestSide >= 512;
+          qualityNote.textContent = largestSide < 512
+            ? `Source is ${loadedImage.naturalWidth}×${loadedImage.naturalHeight}. The 512×512 file is enlarged and cannot contain more detail than the source.`
+            : '';
           siteNameInput.value = fileNameToSiteName(file.name);
           renderPreviews();
           resultPanel.hidden = false;
@@ -554,8 +561,11 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .result-panel { margin: 0; padding: 0; border: 0; }
   .result-header { align-items: center; }
   .result-header h2 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
-  .preview-layout { grid-template-columns: 160px 1fr; gap: 24px; margin-top: 22px; }
+  .preview-layout { grid-template-columns: 256px 1fr; gap: 24px; margin-top: 22px; }
   .preview-label { margin-bottom: 9px; color: #8a8a84; }
+  .source-frame { width: 256px; height: 256px; }
+  .file-meta { width: 256px; }
+  .quality-note { max-width: 520px; margin: 14px 0 0; color: #8a6330; font-size: 12px; line-height: 1.5; }
   .options { margin-top: 24px; border-top: 1px solid #e8e8e4; }
   .options summary { width: max-content; padding: 14px 0 0; color: #777; font-size: 12px; cursor: pointer; }
   .options-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr); gap: 20px; padding-top: 16px; }
@@ -576,6 +586,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     .drop-zone { min-height: 160px; flex-direction: column; }
     .drop-title, .drop-subtitle { text-align: center; }
     .preview-layout { grid-template-columns: 1fr; gap: 22px; }
+    .source-frame, .file-meta { width: min(256px, 100%); }
+    .source-frame { height: auto; aspect-ratio: 1; }
     .options-grid { grid-template-columns: 1fr; }
   }
 </style>
