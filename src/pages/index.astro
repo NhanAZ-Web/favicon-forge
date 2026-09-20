@@ -448,11 +448,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     background: #e9f5fe;
   }
   .drop-zone.is-dragging { transform: scale(.995); }
-  .drop-zone.has-file {
-    min-height: 112px;
-    justify-content: flex-start;
-    padding: 20px 24px;
-  }
   .drop-icon {
     width: 42px;
     height: 42px;
@@ -486,7 +481,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     font-size: 13px;
   }
 
-  .result-panel { margin: 0; padding: 0; }
+  .result-panel {
+    margin-top: 28px;
+    padding: 0;
+  }
   .result-header {
     display: flex;
     align-items: center;
@@ -643,16 +641,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       min-height: 160px;
       flex-direction: column;
     }
-    .drop-zone.has-file {
-      min-height: 100px;
-      flex-direction: row;
-      justify-content: flex-start;
-      padding: 16px;
-    }
     .drop-title,
     .drop-subtitle { text-align: center; }
-    .drop-zone.has-file .drop-title,
-    .drop-zone.has-file .drop-subtitle { text-align: left; }
     .preview-layout {
       grid-template-columns: 1fr;
       gap: 22px;
