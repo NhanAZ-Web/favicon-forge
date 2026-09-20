@@ -635,19 +635,13 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     align-items: center;
     gap: 7px;
     padding: 8px 4px 7px;
-    border: 1px solid rgba(166, 201, 225, .75);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, .78);
     color: #59778f;
     font-size: 10px;
     font-weight: 500;
-    box-shadow: 0 2px 5px rgba(68, 112, 148, .03);
     animation: preview-reveal .5s cubic-bezier(.22, 1, .36, 1) both;
-    transition: border-color .25s ease, box-shadow .25s ease, transform .25s cubic-bezier(.22, 1, .36, 1);
+    transition: transform .25s cubic-bezier(.22, 1, .36, 1);
   }
   :global(.preview-card:hover) {
-    border-color: #9fc7e5;
-    box-shadow: 0 8px 18px rgba(68, 112, 148, .1);
     transform: translateY(-2px);
   }
   :global(.preview-card:nth-child(1)) { animation-delay: .04s; }
