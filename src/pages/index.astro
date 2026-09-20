@@ -410,6 +410,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     flex-wrap: wrap;
     gap: 10px;
     padding: 44px 4px 22px;
+    animation: soft-reveal .7s cubic-bezier(.22, 1, .36, 1) both;
   }
   .intro h1,
   .intro p {
@@ -428,6 +429,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     border-radius: 16px;
     background: #fff;
     box-shadow: 0 18px 42px rgba(68, 112, 148, .08);
+    animation: soft-reveal .75s .06s cubic-bezier(.22, 1, .36, 1) both;
+    transition: border-color .3s ease, box-shadow .3s ease;
   }
   .drop-zone {
     min-height: 180px;
@@ -439,14 +442,16 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     border-radius: 12px;
     background: #f4faff;
     text-align: center;
-    transition: border-color .2s, background .2s, transform .2s;
+    transition: border-color .3s ease, background .3s ease, box-shadow .3s ease, transform .3s cubic-bezier(.22, 1, .36, 1);
   }
   .drop-zone[hidden] { display: none; }
   .drop-zone:hover,
   .drop-zone.is-dragging {
     border-color: #69a8d8;
     background: #e9f5fe;
+    box-shadow: 0 10px 24px rgba(72, 135, 181, .1);
   }
+  .drop-zone:hover { transform: translateY(-1px); }
   .drop-zone.is-dragging { transform: scale(.995); }
   .drop-icon {
     width: 42px;
@@ -457,8 +462,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     border-radius: 12px;
     background: #dceefa;
     color: #4b8fbe;
+    transition: transform .35s cubic-bezier(.22, 1, .36, 1), background .3s ease;
   }
   .drop-icon svg { width: 21px; }
+  .drop-zone:hover .drop-icon { transform: translateY(-2px) rotate(-2deg); }
   .drop-title {
     color: #244b6c;
     font-size: 15px;
@@ -484,6 +491,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .result-panel {
     margin-top: 28px;
     padding: 0;
+    animation: result-reveal .55s cubic-bezier(.22, 1, .36, 1) both;
   }
   .result-header {
     display: flex;
@@ -516,12 +524,14 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     overflow: hidden;
     border: 1px solid #cfe0ee;
     border-radius: 12px;
+    transition: border-color .3s ease, box-shadow .3s ease;
   }
   .source-frame {
     width: 256px;
     height: 256px;
     display: grid;
     place-items: center;
+    animation: soft-reveal .55s .08s cubic-bezier(.22, 1, .36, 1) both;
   }
   .source-frame img {
     width: 100%;
@@ -556,6 +566,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
   .output-surface {
     min-height: 256px;
     padding: 12px;
+    animation: soft-reveal .55s .12s cubic-bezier(.22, 1, .36, 1) both;
   }
   .preview-grid {
     display: grid;
@@ -575,7 +586,21 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     color: #59778f;
     font-size: 10px;
     font-weight: 500;
+    box-shadow: 0 2px 5px rgba(68, 112, 148, .03);
+    animation: preview-reveal .5s cubic-bezier(.22, 1, .36, 1) both;
+    transition: border-color .25s ease, box-shadow .25s ease, transform .25s cubic-bezier(.22, 1, .36, 1);
   }
+  .preview-card:hover {
+    border-color: #9fc7e5;
+    box-shadow: 0 8px 18px rgba(68, 112, 148, .1);
+    transform: translateY(-2px);
+  }
+  .preview-card:nth-child(1) { animation-delay: .04s; }
+  .preview-card:nth-child(2) { animation-delay: .08s; }
+  .preview-card:nth-child(3) { animation-delay: .12s; }
+  .preview-card:nth-child(4) { animation-delay: .16s; }
+  .preview-card:nth-child(5) { animation-delay: .2s; }
+  .preview-card:nth-child(6) { animation-delay: .24s; }
   .icon-frame {
     width: 80px;
     height: 80px;
@@ -605,7 +630,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     font-size: 13px;
     font-weight: 700;
     box-shadow: 0 8px 20px rgba(72, 135, 181, .18);
-    transition: background .2s, border-color .2s, transform .2s;
+    transition: background .3s ease, border-color .3s ease, box-shadow .3s ease, transform .3s cubic-bezier(.22, 1, .36, 1);
   }
   .download-button:hover {
     border-color: #4b8fbe;
@@ -613,6 +638,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     transform: translateY(-1px);
   }
   .download-button:disabled { cursor: wait; opacity: .7; }
+  .download-button:active { transform: translateY(1px) scale(.995); }
   .download-button > span {
     color: #eff9ff;
     font-size: 18px;
@@ -627,6 +653,29 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     animation: spin .7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes soft-reveal {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes result-reveal {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes preview-reveal {
+    from { opacity: 0; transform: translateY(6px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(*),
+    :global(*::before),
+    :global(*::after) {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: .01ms !important;
+    }
+  }
 
   @media (max-width: 720px) {
     .page-shell { width: calc(100% - 20px); }
