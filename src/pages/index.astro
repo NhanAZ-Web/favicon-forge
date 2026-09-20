@@ -36,8 +36,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
             </svg>
           </div>
           <div>
-            <div class="drop-title">Drop or choose a logo</div>
-            <div class="drop-subtitle">PNG, JPG, WEBP or SVG · 512×512 or larger recommended</div>
+            <div class="drop-title" id="drop-title">Drop or choose a logo</div>
+            <div class="drop-subtitle" id="drop-subtitle">PNG, JPG, WEBP or SVG · 512×512 or larger recommended</div>
           </div>
         </div>
 
@@ -46,7 +46,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         <div class="result-panel" id="result-panel" hidden>
           <div class="result-header">
             <h2>Preview</h2>
-            <button class="text-button" id="change-button" type="button">Replace logo</button>
           </div>
 
           <div class="preview-layout">
@@ -92,13 +91,14 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
 
       const dropZone = $('#drop-zone');
       const fileInput = $('#file-input');
+      const dropTitle = $('#drop-title');
+      const dropSubtitle = $('#drop-subtitle');
       const errorMessage = $('#error-message');
       const resultPanel = $('#result-panel');
       const sourcePreview = $('#source-preview');
       const fileMeta = $('#file-meta');
       const previewGrid = $('#preview-grid');
       const downloadButton = $('#download-button');
-      const changeButton = $('#change-button');
 
       let selectedFile = null;
       let loadedImage = null;
@@ -265,8 +265,10 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
           fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}`;
           renderPreviews();
           resultPanel.hidden = false;
-          dropZone.hidden = true;
-          resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          dropZone.classList.add('has-file');
+          dropZone.setAttribute('aria-label', 'Choose or drop another logo');
+          dropTitle.textContent = 'Drop or choose another logo';
+          dropSubtitle.textContent = 'PNG, JPG, WEBP or SVG · Drop a new file to replace the current logo';
         } catch (error) {
           selectedFile = null;
           loadedImage = null;
@@ -363,7 +365,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         }
       });
       fileInput.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
-      changeButton.addEventListener('click', () => fileInput.click());
       downloadButton.addEventListener('click', downloadPackage);
 
       ['dragenter', 'dragover'].forEach((eventName) => {
@@ -447,6 +448,11 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     background: #e9f5fe;
   }
   .drop-zone.is-dragging { transform: scale(.995); }
+  .drop-zone.has-file {
+    min-height: 112px;
+    justify-content: flex-start;
+    padding: 20px 24px;
+  }
   .drop-icon {
     width: 42px;
     height: 42px;
@@ -493,22 +499,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
     font-size: 20px;
     letter-spacing: -.03em;
   }
-  .text-button {
-    padding: 9px 12px;
-    border: 1px solid #b9d7ed;
-    border-radius: 9px;
-    background: #edf7ff;
-    color: #3277a7;
-    font-size: 12px;
-    font-weight: 600;
-    transition: background .2s, border-color .2s, transform .2s;
-  }
-  .text-button:hover {
-    border-color: #8ebfe0;
-    background: #dff1fd;
-    transform: translateY(-1px);
-  }
-
   .preview-layout {
     display: grid;
     grid-template-columns: 256px minmax(0, 1fr);
@@ -653,8 +643,16 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
       min-height: 160px;
       flex-direction: column;
     }
+    .drop-zone.has-file {
+      min-height: 100px;
+      flex-direction: row;
+      justify-content: flex-start;
+      padding: 16px;
+    }
     .drop-title,
     .drop-subtitle { text-align: center; }
+    .drop-zone.has-file .drop-title,
+    .drop-zone.has-file .drop-subtitle { text-align: left; }
     .preview-layout {
       grid-template-columns: 1fr;
       gap: 22px;
@@ -671,7 +669,6 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
 
   @media (max-width: 390px) {
     .result-header { align-items: flex-start; }
-    .text-button { padding: 8px 10px; }
     .preview-grid { grid-template-columns: 1fr; }
   }
 </style>
