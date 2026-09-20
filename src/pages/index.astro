@@ -102,7 +102,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
 
       let selectedFile = null;
       let loadedImage = null;
-      let previewObjectUrl = null;
+      let sourceCanvas = null;
+      let sourceBounds = null;
 
       function showError(message) {
         errorMessage.textContent = message;
@@ -142,6 +143,56 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         });
       }
 
+      function rasterizeSource() {
+        const canvas = document.createElement('canvas');
+        canvas.width = loadedImage.naturalWidth;
+        canvas.height = loadedImage.naturalHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(loadedImage, 0, 0, canvas.width, canvas.height);
+        return canvas;
+      }
+
+      function detectSourceBounds() {
+        const width = loadedImage.naturalWidth;
+        const height = loadedImage.naturalHeight;
+        const context = sourceCanvas?.getContext('2d', { willReadFrequently: true });
+
+        if (!context || width * height > 16_000_000) {
+          return { x: 0, y: 0, width, height };
+        }
+
+        const pixels = context.getImageData(0, 0, width, height).data;
+        let left = width;
+        let top = height;
+        let right = -1;
+        let bottom = -1;
+
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) {
+            if (pixels[(y * width + x) * 4 + 3] > 8) {
+              left = Math.min(left, x);
+              top = Math.min(top, y);
+              right = Math.max(right, x);
+              bottom = Math.max(bottom, y);
+            }
+          }
+        }
+
+        if (right < left || bottom < top) {
+          return { x: 0, y: 0, width, height };
+        }
+
+        const contentWidth = right - left + 1;
+        const contentHeight = bottom - top + 1;
+        const margin = Math.max(2, Math.round(Math.max(contentWidth, contentHeight) * 0.08));
+        const x = Math.max(0, left - margin);
+        const y = Math.max(0, top - margin);
+        const maxX = Math.min(width, right + margin + 1);
+        const maxY = Math.min(height, bottom + margin + 1);
+
+        return { x, y, width: maxX - x, height: maxY - y };
+      }
+
       function createIconCanvas(size) {
         const canvas = document.createElement('canvas');
         canvas.width = size;
@@ -150,14 +201,16 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         context.clearRect(0, 0, size, size);
         context.imageSmoothingEnabled = false;
 
-        // Preserve the complete source canvas, including intentional transparent
-        // margins. Cropping it changes the pixel grid and makes pixel art uneven.
-        const source = loadedImage;
-        const sourceWidth = loadedImage.naturalWidth;
-        const sourceHeight = loadedImage.naturalHeight;
-        const scale = Math.min(size / sourceWidth, size / sourceHeight);
-        let width = sourceWidth * scale;
-        let height = sourceHeight * scale;
+        const source = sourceCanvas || loadedImage;
+        const bounds = sourceBounds || {
+          x: 0,
+          y: 0,
+          width: loadedImage.naturalWidth,
+          height: loadedImage.naturalHeight,
+        };
+        const scale = Math.min(size / bounds.width, size / bounds.height);
+        let width = bounds.width * scale;
+        let height = bounds.height * scale;
         let x = (size - width) / 2;
         let y = (size - height) / 2;
 
@@ -166,7 +219,7 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         x = Math.floor((size - width) / 2);
         y = Math.floor((size - height) / 2);
 
-        context.drawImage(source, x, y, width, height);
+        context.drawImage(source, bounds.x, bounds.y, bounds.width, bounds.height, x, y, width, height);
         return canvas;
       }
 
@@ -258,9 +311,9 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         try {
           selectedFile = file;
           loadedImage = await loadImage(file);
-          if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
-          previewObjectUrl = URL.createObjectURL(file);
-          sourcePreview.src = previewObjectUrl;
+          sourceCanvas = rasterizeSource();
+          sourceBounds = detectSourceBounds();
+          sourcePreview.src = createIconCanvas(256).toDataURL('image/png');
           sourcePreview.alt = `Logo ${file.name}`;
           fileMeta.textContent = `${file.name} · ${loadedImage.naturalWidth}×${loadedImage.naturalHeight} · ${formatBytes(file.size)}`;
           renderPreviews();
@@ -272,6 +325,8 @@ const basePath = import.meta.env.BASE_URL.endsWith('/')
         } catch (error) {
           selectedFile = null;
           loadedImage = null;
+          sourceCanvas = null;
+          sourceBounds = null;
           showError(error.message);
         }
       }
